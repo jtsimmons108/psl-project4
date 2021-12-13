@@ -1,0 +1,252 @@
+---
+title: "Project 4 - MovieRecommendations"
+subtitle: "Practical Statistical Learning" 
+author: "Jeremiah Simmons jts10 1371"
+date: "12/12/2021"
+output:
+  html_document:
+    toc: TRUE
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(recommenderlab)
+library(DT)
+library(data.table)
+library(reshape2)
+opts_chunk$set(cache = TRUE, autodep = TRUE, echo = TRUE)
+```
+
+
+# Prepare the Data
+
+To begin, I read the data in and prepare it for operation.  There are three files that are being used here.
+
+ - ratings.dat - Contains about 1 million ratings from all the users on the movies
+ - movies.dat  - Contains the information on all the movies that are rated
+ - users.dat   - Contains the information on all the users that are doing the rating.
+
+```{r}
+# use colClasses = 'NULL' to skip columns
+ratings = read.csv("ratings.dat", 
+                   sep = ':',
+                   colClasses = c('integer', 'NULL'), 
+                   header = FALSE)
+colnames(ratings) = c('UserID', 'MovieID', 'Rating', 'Timestamp')
+head(ratings)
+```
+
+```{r}
+movies = readLines('movies.dat')
+movies = strsplit(movies, split = "::", fixed = TRUE, useBytes = TRUE)
+movies = matrix(unlist(movies), ncol = 3, byrow = TRUE)
+movies = data.frame(movies, stringsAsFactors = FALSE)
+colnames(movies) = c('MovieID', 'Title', 'Genres')
+movies$MovieID = as.integer(movies$MovieID)
+
+# convert accented characters
+movies$Title = iconv(movies$Title, "latin1", "UTF-8")
+
+# extract year
+movies$Year = as.numeric(unlist(
+  lapply(movies$Title, function(x) substr(x, nchar(x)-4, nchar(x)-1))))
+
+head(movies)
+```
+
+```{r}
+users = read.csv('users.dat',
+                 sep = ':', header = FALSE)
+users = users[, -c(2,4,6,8)] # skip columns
+colnames(users) = c('UserID', 'Gender', 'Age', 'Occupation', 'Zip-code')
+```
+
+
+# System 1
+
+For system 1, we are to simply come up with two ratings systems for users by genre.  I define my two ratings systems to be as follows:
+
+- Most popular: I consider the movies that are most popular to be the movies that have been rated the most
+- Highest rated: I consider the movies that are the highest rated to be the movies with the highest average rating.  To ensure that the movie has been sufficiently rated, I only include movies that have at least 100 ratings.
+
+To begin, I count how many times a movie has been rated and calcuate the average rating.  I then join the data with the movies so that I have a new tibble that I can access for the ratings.
+
+```{r}
+rated_movies = ratings %>% 
+  group_by(MovieID) %>% 
+  summarize(ratings_per_movie = n(), 
+            ave_ratings = round(mean(Rating), dig=3)) %>%
+  inner_join(movies, by = 'MovieID')
+
+head(rated_movies)
+```
+
+Now that I have the ratings calculated, I create a matrix with dummy variables that includes whether or not each movie is considered part of the genre.  
+
+```{r}
+genres = as.data.frame(rated_movies$Genres, stringsAsFactors=FALSE)
+tmp = as.data.frame(tstrsplit(genres[,1], '[|]',
+                              type.convert=TRUE),
+                    stringsAsFactors=FALSE)
+genre_list = c("Action", "Adventure", "Animation", 
+               "Children's", "Comedy", "Crime",
+               "Documentary", "Drama", "Fantasy",
+               "Film-Noir", "Horror", "Musical", 
+               "Mystery", "Romance", "Sci-Fi", 
+               "Thriller", "War", "Western")
+m = length(genre_list)
+genre_matrix = matrix(0, nrow(rated_movies), length(genre_list))
+for(i in 1:nrow(tmp)){
+  genre_matrix[i,genre_list %in% tmp[i,]]=1
+}
+colnames(genre_matrix) = genre_list
+remove("tmp", "genres")
+```
+
+Now that the genres and ratings have been calculated, I created two quality of life functions to filter the movies by the genre, sort it in the proper order, and then return only the top N desired movies.
+
+```{r}
+get_most_popular_by_genre = function(genre, n){
+    tmp = rated_movies[genre_matrix[, genre] == 1, ]
+    tmp = arrange(tmp, -ratings_per_movie)
+    tmp[1:n, ]
+}
+
+
+get_highest_rated_by_genre = function(genre, n){
+    tmp = rated_movies[genre_matrix[, genre] == 1, ]
+    tmp = tmp %>% filter(ratings_per_movie > 100)
+    tmp = arrange(tmp, -ave_ratings)
+    tmp[1:n, ]
+}
+```
+
+Here are the top 5 movies for each genre according to each ranking algorithm.
+
+```{r}
+for (i in 1:length(genre_list)){
+  print(genre_list[i])
+  print(get_most_popular_by_genre(genre_list[i], 5))
+}
+```
+
+
+```{r}
+for (i in 1:length(genre_list)){
+  print(genre_list[i])
+  print(get_highest_rated_by_genre(genre_list[i], 5))
+}
+```
+
+For the purposes of the webapp, I decided to go with the most popular route and return the top N movies of the genre as sorted by number of ratings.
+
+
+# System 2
+
+For System 2 at the recommendation of the professor on Campus wire, I chose to go with User-Based Collaborative Filtering and Item-Based Collaborative Filtering.  To prepare the data, I created a sparse matrix with all of the ratings containing the data on which movie it was and which user the rating was by.
+
+
+```{r}
+rating_ids = paste0('u', ratings$UserID)
+user_ids = paste0('m', ratings$MovieID)
+ratings = ratings$Rating
+tmp = data.frame(rating_ids, user_ids, ratings, stringsAsFactors = T)
+Rmat = sparseMatrix(as.integer(tmp$rating_ids), as.integer(tmp$user_ids), x = tmp$ratings)
+rownames(Rmat) = levels(tmp$rating_ids)
+colnames(Rmat) = levels(tmp$user_ids)
+Rmat = new('realRatingMatrix', data = Rmat)
+```
+
+To evaluate the accuracy of each model, I used evaluationScheme to handle splitting the data and running the 10-fold cross validation.  
+
+```{r}
+scheme = evaluationScheme(Rmat, method = "split", train = 0.8, given = 10, k = 10)
+```
+
+```{r}
+ubcf = list(
+    name = "UBCF",
+    param = list(normalize = "Z-score",
+                 method = 'Cosine',
+                 weighted = TRUE,
+                 nn = 25))
+
+ubcf_results = evaluate(scheme, list("ubcf" = ubcf), type = "ratings")
+```
+
+Looking at the results, we can see that UBCF is slow to predict but quick to train.  For each result, the code evaluates the RMSE, MSE, and MAE for each fold.  
+```{r}
+getResults(ubcf_results$ubcf)[[1]]
+```
+
+I decided to look at the RMSE for each fold and gathered them into a vector.
+
+```{r}
+ubcf_rmse = rep(0, 10)
+for (i in 1:10){
+  ubcf_rmse[i] = getResults(ubcf_results$ubcf)[[i]][1]
+}
+ubcf_rmse
+```
+
+```{r}
+ibcf = list(
+    name = "IBCF",
+    param = list(normalize = "Z-score",
+                 method = 'Cosine',
+                 k = 25))
+ibcf_results = evaluate(scheme, list("ibcf" = ibcf), type = "ratings")
+```
+
+Looking at the IBCF results, we can see that the model is slow to train but quick to predict.
+
+
+```{r}
+getResults(ibcf_results$ibcf)[[1]]
+```
+
+
+```{r}
+ibcf_rmse = rep(0, 10)
+for (i in 1:10){
+  ibcf_rmse[i] = getResults(ibcf_results$ibcf)[[i]][1]
+}
+ibcf_rmse
+```
+
+
+At first, I planned on going with the IBCF because it was quicker to predict.  I was just going to write the model to a file and then use it in the web app.  However, I ran into several issues where giving the same rating to all the movies produced NAs for the results.  Instead, I decided to go with the UBCF for the web app.  To demonstrate it's usage, I will train a model.  Then, I will create a new user with some dummy ratings and show how you can predict the top recommendations for that user.
+
+```{r}
+rec_UBCF = Recommender(Rmat, method = 'UBCF',
+                       parameter = list(method = 'Cosine',
+                                        normalize = "Z-score",
+                                        nn = 25))
+
+movieIDs = colnames(Rmat)
+n.item = ncol(Rmat)
+# length(unique(ratings$MovieID)) # as as n.item
+new.ratings = rep(NA, n.item)
+new.ratings[which(movieIDs == "m1")] = 1
+new.ratings[which(movieIDs == "m2")] = 5
+new.ratings[which(movieIDs == "m3")] = 3
+new.ratings[which(movieIDs == "m4")] = 4
+new.ratings[which(movieIDs == "m5")] = 2
+
+new.user = matrix(new.ratings, 
+                  nrow=1, ncol=n.item,
+                  dimnames = list(
+                    user="newUser",
+                    item=movieIDs
+                  ))
+new.Rmat = as(new.user, 'realRatingMatrix')
+dim(new.Rmat) 
+
+recom1 = predict(rec_UBCF, new.Rmat, type = 'ratings')
+
+order(as(recom1, "matrix"), decreasing = TRUE)[1:10]
+sort(as(recom1, "matrix"), decreasing = TRUE)[1:10]
+```
+

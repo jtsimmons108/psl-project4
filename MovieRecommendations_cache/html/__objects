@@ -1,0 +1,17 @@
+unnamed-chunk-1	ratings
+unnamed-chunk-2	movies
+unnamed-chunk-3	users
+unnamed-chunk-4	rated_movies
+unnamed-chunk-5	genre_list	genre_matrix	i	m
+unnamed-chunk-6	get_highest_rated_by_genre	get_most_popular_by_genre
+unnamed-chunk-7	i
+unnamed-chunk-8	i
+unnamed-chunk-9	rating_ids	ratings	Rmat	tmp	user_ids
+unnamed-chunk-10	scheme	.Random.seed
+unnamed-chunk-11	ubcf	ubcf_results
+unnamed-chunk-12	
+unnamed-chunk-13	i	ubcf_rmse
+unnamed-chunk-14	ibcf	ibcf_results
+unnamed-chunk-15	
+unnamed-chunk-16	i	ibcf_rmse
+unnamed-chunk-17	movieIDs	n.item	new.ratings	new.Rmat	new.user	rec_UBCF	recom1

@@ -1,0 +1,17 @@
+unnamed-chunk-1	c	colnames<-	head	read.csv
+unnamed-chunk-2	$	$<-	as.integer	as.numeric	c	colnames<-	data.frame	head	iconv	lapply	matrix	nchar	readLines	strsplit	substr	unlist
+unnamed-chunk-3	c	colnames<-	read.csv
+unnamed-chunk-4	%>%	group_by	head	inner_join	mean	MovieID	movies	n	Rating	ratings	round	summarize
+unnamed-chunk-5	[<-	$	as.data.frame	c	colnames<-	for	length	matrix	nrow	rated_movies	remove	tstrsplit
+unnamed-chunk-6	%>%	==	>	arrange	ave_ratings	filter	genre_matrix	rated_movies	ratings_per_movie
+unnamed-chunk-7	for	genre_list	get_most_popular_by_genre	length	print
+unnamed-chunk-8	for	genre_list	get_highest_rated_by_genre	length	print
+unnamed-chunk-9	$	as.integer	colnames<-	data.frame	levels	new	paste0	rownames<-	sparseMatrix	T
+unnamed-chunk-10	evaluationScheme	Rmat
+unnamed-chunk-11	evaluate	list	scheme
+unnamed-chunk-12	[[	$	getResults	ubcf_results
+unnamed-chunk-13	[[	[<-	$	for	getResults	rep	ubcf_results
+unnamed-chunk-14	evaluate	list	scheme
+unnamed-chunk-15	[[	$	getResults	ibcf_results
+unnamed-chunk-16	[[	[<-	$	for	getResults	ibcf_results	rep
+unnamed-chunk-17	[<-	==	as	colnames	dim	list	matrix	ncol	order	predict	Recommender	rep	Rmat	sort	which

@@ -1,0 +1,12 @@
+base
+knitr
+dplyr
+ggplot2
+Matrix
+arules
+proxy
+registry
+recommenderlab
+DT
+data.table
+reshape2
